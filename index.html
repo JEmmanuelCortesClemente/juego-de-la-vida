@@ -1,140 +1,137 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conway's Game of Life with Three.js</title>
+    <title>El Juego de la Vida 2D con Three.js</title>
     <style>
         body {
             margin: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
-            background-color: white;
         }
-        #container {
-            text-align: center;
-            transform: scale(0.7);
+        #titulo {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 2em;
+            color: #ffffff;
         }
-        canvas {
-            display: block;
-        }
-        h1 {
-            color: black;
+        #reiniciar {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 1.5em;
+            color: #ffffff;
+            background-color: #0000ff;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
-    <div id="container">
-        <h1>EL JUEGO DE LA VIDA 2D</h1>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-        <script>
+    <div id="titulo">El nombre de este juego</div>
+    <button id="reiniciar">Reiniciar</button>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Dimensiones del mundo
+        const ancho = 60; // Aumenta el tamaño del juego de la vida
+        const altura = 45; // Aumenta el tamaño del juego de la vida
+        const tamanoCelda = 30;
 
-            // Definir dimensiones del mundo
-            const width = 80;
-            const height = 60;
-            const cellSize = 10;
-            const canvasWidth = width * cellSize;
-            const canvasHeight = height * cellSize;
+        // Inicialización de Three.js
+        const scene = new THREE.Scene();
+        const aspectRatio = window.innerWidth / window.innerHeight;
+        const camera = new THREE.PerspectiveCamera(75, aspectRatio, 0.1, 1000);
+        camera.position.z = 50; // Ajusta la posición de la cámara para que pueda ver toda la escena
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight); // Ajusta el tamaño del renderizador para que rellene la pantalla completa
+        document.body.appendChild(renderer.domElement);
 
-            // Crear un canvas
-            const canvas = document.createElement('canvas');
-            canvas.width = canvasWidth;
-            canvas.height = canvasHeight;
-            document.getElementById('container').appendChild(canvas);
+        // Añade una luz ambiental
+        const light = new THREE.AmbientLight(0xffffff); // Luz blanca
+        scene.add(light);
 
-            // Obtener contexto 2D del canvas
-            const ctx = canvas.getContext('2d');
+        // Estado inicial de las células
+        let celdas = new Array(ancho).fill(0).map(() => new Array(altura).fill(0).map(() => Math.random() > 0.5));
 
-            // Función para dibujar la cuadrícula
-            function drawGrid() {
-                ctx.strokeStyle = 'black';
-                ctx.lineWidth = 1;
+        // Crear las celdas una vez y añadirlas a la escena
+        const geometry = new THREE.BoxGeometry(1, 1, 1);
+        const materialViva = new THREE.MeshBasicMaterial({ color: 0x0000ff }); // Cambia el color de las células vivas a azul
+        const materialMuerta = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const materialBorde = new THREE.LineBasicMaterial({ color: 0x000000 }); // Material para los bordes
+        const meshCeldas = [];
+        for (let i = 0; i < ancho; i++) {
+            meshCeldas[i] = [];
+            for (let j = 0; j < altura; j++) {
+                const cell = new THREE.Mesh(geometry, celdas[i][j] ? materialViva : materialMuerta);
+                cell.position.set(i - ancho / 2 + 2, j - altura / 2 + 2, 2);
+                meshCeldas[i][j] = cell;
+                scene.add(cell);
 
-                // Dibujar líneas verticales
-                for (let i = 0; i <= width; i++) {
-                    const x = i * cellSize;
-                    ctx.beginPath();
-                    ctx.moveTo(x, 0);
-                    ctx.lineTo(x, canvasHeight);
-                    ctx.stroke();
-                }
+                // Añade bordes a la celda
+                const edges = new THREE.EdgesGeometry(geometry);
+                const line = new THREE.LineSegments(edges, materialBorde);
+                line.position.set(i - ancho / 2 + 2, j - altura / 2 + 2, 2);
+                scene.add(line);
+            }
+        }
 
-                // Dibujar líneas horizontales
-                for (let j = 0; j <= height; j++) {
-                    const y = j * cellSize;
-                    ctx.beginPath();
-                    ctx.moveTo(0, y);
-                    ctx.lineTo(canvasWidth, y);
-                    ctx.stroke();
+        // Función para dibujar las células
+        function dibujarCeldas() {
+            for (let i = 0; i < ancho; i++) {
+                for (let j = 0; j < altura; j++) {
+                    meshCeldas[i][j].material = celdas[i][j] ? materialViva : materialMuerta;
                 }
             }
+        }
 
-            // Función para dibujar las células vivas
-            function drawCells() {
-                ctx.fillStyle = 'green';
-                for (let i = 0; i < width; i++) {
-                    for (let j = 0; j < height; j++) {
-                        if (cells[i][j]) {
-                            const x = i * cellSize;
-                            const y = j * cellSize;
-                            ctx.fillRect(x, y, cellSize, cellSize);
+        // Función para actualizar el estado de las células
+        function actualizarCeldas() {
+            const nuevasCeldas = [];
+            for (let i = 0; i < ancho; i++) {
+                nuevasCeldas[i] = [];
+                for (let j = 0; j < altura; j++) {
+                    let vecinos = 0;
+                    for (let x = -1; x <= 1; x++) {
+                        for (let y = -1; y <= 1; y++) {
+                            if (x === 0 && y === 0) continue;
+                            const ni = (i + x + ancho) % ancho;
+                            const nj = (j + y + altura) % altura;
+                            vecinos += celdas[ni][nj];
                         }
                     }
+                    nuevasCeldas[i][j] = vecinos === 3 || (vecinos === 2 && celdas[i][j]);
                 }
             }
+            celdas = nuevasCeldas;
+        }
 
-            // Función para actualizar el estado de las células
-            function updateCells() {
-                const newCells = [];
-                for (let i = 0; i < width; i++) {
-                    newCells[i] = [];
-                    for (let j = 0; j < height; j++) {
-                        let neighbors = 0;
-                        for (let x = -1; x <= 1; x++) {
-                            for (let y = -1; y <= 1; y++) {
-                                if (x === 0 && y === 0) continue;
-                                const ni = (i + x + width) % width;
-                                const nj = (j + y + height) % height;
-                                neighbors += cells[ni][nj];
-                            }
-                        }
-                        newCells[i][j] = neighbors === 3 || (neighbors === 2 && cells[i][j]);
-                    }
-                }
-                for (let i = 0; i < width; i++) {
-                    for (let j = 0; j < height; j++) {
-                        cells[i][j] = newCells[i][j];
-                    }
-                }
-            }
+        // Función para reiniciar el juego
+        function reiniciar() {
+            celdas = new Array(ancho).fill(0).map(() => new Array(altura).fill(0).map(() => Math.random() > 0.5));
+        }
 
-            // Función para inicializar el estado inicial de las células
-            function initializeCells() {
-                cells = [];
-                for (let i = 0; i < width; i++) {
-                    cells[i] = [];
-                    for (let j = 0; j < height; j++) {
-                        cells[i][j] = Math.random() > 0.5 ? 1 : 0;
-                    }
-                }
-            }
+        // Función para renderizar la escena
+        function renderizar() {
+            requestAnimationFrame(renderizar);
+            actualizarCeldas();
+            dibujarCeldas();
+            renderer.render(scene, camera);
+        }
 
-            // Bucle principal de animación
-            function animate() {
-                updateCells();
-                ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-                drawGrid();
-                drawCells();
-                requestAnimationFrame(animate);
-            }
+        // Llamada inicial a la función renderizar
+        renderizar();
 
-            // Inicializar y comenzar la animación
-            initializeCells();
-            animate();
-
-        </script>
-    </div>
+        // Agrega un evento al botón de reinicio
+        document.getElementById('reiniciar').addEventListener('click', reiniciar);
+    </script>
 </body>
 </html>
